@@ -1,5 +1,7 @@
 package vista;
 
+import datos.EntregaDAO;
+import datos.RepartidorDAO;
 import modelo.GestorPedidos;
 import modelo.Pedido;
 import modelo.Repartidor;
@@ -26,8 +28,11 @@ public class VentanaEntrega extends JFrame {
 
         comboPedidos = new JComboBox<>();
 
+        // Cargar pedidos pendientes desde MySQL
         for (Pedido pedido : GestorPedidos.obtenerPedidos()) {
+
             if (pedido.getEstado().equals("Pendiente")) {
+
                 comboPedidos.addItem(
                         pedido.getId() + " - " + pedido.getDireccion()
                 );
@@ -37,7 +42,9 @@ public class VentanaEntrega extends JFrame {
         panel.add(comboPedidos);
 
         panel.add(new JLabel("Repartidor:"));
+
         campoRepartidor = new JTextField();
+
         panel.add(campoRepartidor);
 
         JButton botonIniciar = new JButton("Iniciar Entrega");
@@ -52,49 +59,77 @@ public class VentanaEntrega extends JFrame {
 
     private void iniciarEntrega() {
 
+        // Verificar que exista un pedido pendiente
         if (comboPedidos.getSelectedItem() == null) {
+
             JOptionPane.showMessageDialog(
                     this,
                     "No hay pedidos pendientes.",
                     "Aviso",
                     JOptionPane.WARNING_MESSAGE
             );
+
             return;
         }
 
+        // Obtener nombre del repartidor
         String nombreRepartidor = campoRepartidor.getText().trim();
 
         if (nombreRepartidor.isEmpty()) {
+
             JOptionPane.showMessageDialog(
                     this,
                     "Debe ingresar el nombre del repartidor.",
                     "Error",
                     JOptionPane.ERROR_MESSAGE
             );
+
             return;
         }
 
+        // Obtener ID del pedido seleccionado
         String seleccion = (String) comboPedidos.getSelectedItem();
-        int id = Integer.parseInt(seleccion.split(" - ")[0]);
 
-        for (Pedido pedido : GestorPedidos.obtenerPedidos()) {
+        int idPedido = Integer.parseInt(
+                seleccion.split(" - ")[0]
+        );
 
-            if (pedido.getId() == id) {
+        // Crear repartidor
+        Repartidor repartidor = new Repartidor(nombreRepartidor);
 
-                Repartidor repartidor = new Repartidor(nombreRepartidor);
+        // Guardar repartidor en MySQL
+        RepartidorDAO.guardar(repartidor);
 
-                pedido.setRepartidor(repartidor);
-                pedido.setEstado("En entrega - " + repartidor.getNombre());
+        // Obtener el ID que MySQL asignó al repartidor
+        int idRepartidor = EntregaDAO.obtenerUltimoIdRepartidor();
 
-                JOptionPane.showMessageDialog(
-                        this,
-                        "Entrega iniciada correctamente.\nRepartidor: "
-                                + repartidor.getNombre()
-                );
+        if (idRepartidor == -1) {
 
-                dispose();
-                return;
-            }
+            JOptionPane.showMessageDialog(
+                    this,
+                    "No se pudo obtener el repartidor.",
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+
+            return;
         }
+
+        // Guardar la entrega en MySQL
+        EntregaDAO.guardar(idPedido, idRepartidor);
+
+        // Actualizar estado del pedido
+        GestorPedidos.actualizarEstado(
+                idPedido,
+                "En entrega - " + repartidor.getNombre()
+        );
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Entrega iniciada correctamente.\nRepartidor: "
+                        + repartidor.getNombre()
+        );
+
+        dispose();
     }
 }
